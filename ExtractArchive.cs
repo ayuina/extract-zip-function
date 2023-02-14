@@ -15,11 +15,12 @@ namespace extract_zip_function
         [StorageAccount("DataStorage")]
         public async Task Run(
             [BlobTrigger("archive-upload/{name}", Source = BlobTriggerSource.EventGrid)] Stream myBlob, 
-            string name, 
+            string name,
             Binder binder,
             ILogger log)
         {
-            log.LogInformation($"C# Blob trigger function Processed blob\n Name:{name} \n Size: {myBlob.Length} Bytes");
+            log.LogInformation($"C# Blob trigger function Processed blob, Name: {name}, Size: {myBlob.Length} Bytes");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
 
             using(var zip = new ZipArchive(myBlob, ZipArchiveMode.Read))
             {
@@ -29,11 +30,11 @@ namespace extract_zip_function
                 {
                     if(entry.FullName.EndsWith("/"))
                     {
-                        log.LogInformation($"skipping entry {idx++} : {entry.FullName}, original {entry.Length} bytes,  compressed {entry.CompressedLength} bytes");
+                        log.LogDebug($"skipping entry {idx++} : {entry.FullName}, original {entry.Length} bytes,  compressed {entry.CompressedLength} bytes");
                         continue;
                     }
 
-                    log.LogInformation($"extracting entry {idx++} : {entry.FullName}, original {entry.Length} bytes,  compressed {entry.CompressedLength} bytes");
+                    log.LogDebug($"extracting entry {idx++} : {entry.FullName}, original {entry.Length} bytes,  compressed {entry.CompressedLength} bytes");
                     var outputbind = new Attribute[]{
                         new BlobAttribute($"archive-extracted/{prefix}/{name}/{entry.FullName}", FileAccess.Write)
                     };
@@ -43,6 +44,9 @@ namespace extract_zip_function
                     }
                 }
             }
+
+            sw.Stop();
+            log.LogInformation($"Elapsed Time {sw.ElapsedMilliseconds} msec");
         }
     }
 }
