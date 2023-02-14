@@ -1,3 +1,10 @@
+# prerequisite
+
+- [WSL](https://learn.microsoft.com/ja-jp/windows/wsl/install)
+- [.NET 6.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/6.0)
+- [Azure CLI](https://learn.microsoft.com/ja-jp/cli/azure/install-azure-cli-linux?pivots=apt)
+- [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools)
+
 # parameters
 
 ```bash
@@ -65,6 +72,7 @@ az network private-dns zone create --resource-group $rg --name $blobZone
 az network private-dns link vnet create --resource-group $rg --zone-name $blobZone --name "blob-link" --virtual-network $vnet --registration-enabled false
 az network private-endpoint dns-zone-group create --resource-group $rg --private-dns-zone $blobZone --endpoint-name $blobpe --name "blob-pe-zone-group"  --zone-name 'config1'
 
+# deny access from public
 az storage account update --name $datastr --resource-group $rg --public-network-access Disabled
 
 # azure functions
@@ -79,6 +87,13 @@ az webapp vnet-integration add --resource-group $rg --name $funcapp --vnet $vnet
 az functionapp config appsettings set --resource-group $rg --name $funcapp \
     --settings "vnetrouteallenabled=1"
 
+### private endpoint
+### allow inbound from event grid
+### enable vnet trigger
+### binding path to app settings
+
+### eventgrid private mondai
+https://learn.microsoft.com/ja-jp/azure/event-grid/managed-service-identity#private-endpoints
 
 # monitoring
 az monitor log-analytics workspace create --location $region --resource-group $rg --workspace-name $laws --sku PerGB2018
