@@ -1,9 +1,0 @@
-{
-  "profiles": {
-    "extract_zip_function": {
-      "commandName": "Project",
-      "commandLineArgs": "--port 7093",
-      "launchBrowser": false
-    }
-  }
-}

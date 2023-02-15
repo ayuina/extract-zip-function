@@ -1,0 +1,345 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.14.46.61228",
+      "templateHash": "17135852370222807696"
+    }
+  },
+  "parameters": {
+    "prefix": {
+      "type": "string",
+      "defaultValue": "ayuina0215b"
+    },
+    "region": {
+      "type": "string",
+      "defaultValue": "westus3"
+    }
+  },
+  "variables": {
+    "funcStrName": "[format('{0}funcstr', parameters('prefix'))]",
+    "logAnalyticsName": "[format('{0}-laws', parameters('prefix'))]",
+    "appInsightsName": "[format('{0}-ai', parameters('prefix'))]",
+    "funcAppName": "[format('{0}-func', parameters('prefix'))]",
+    "funcPlanName": "[format('{0}-func-plan', parameters('prefix'))]",
+    "dataStrName": "[format('{0}datastr', parameters('prefix'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "platforn",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "region": {
+            "value": "[parameters('region')]"
+          },
+          "funcStrName": {
+            "value": "[variables('funcStrName')]"
+          },
+          "logAnalyticsName": {
+            "value": "[variables('logAnalyticsName')]"
+          },
+          "appInsightsName": {
+            "value": "[variables('appInsightsName')]"
+          },
+          "funcAppName": {
+            "value": "[variables('funcAppName')]"
+          },
+          "funcPlanName": {
+            "value": "[variables('funcPlanName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.14.46.61228",
+              "templateHash": "14793049501460110995"
+            }
+          },
+          "parameters": {
+            "region": {
+              "type": "string"
+            },
+            "funcStrName": {
+              "type": "string"
+            },
+            "logAnalyticsName": {
+              "type": "string"
+            },
+            "appInsightsName": {
+              "type": "string"
+            },
+            "funcAppName": {
+              "type": "string"
+            },
+            "funcPlanName": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2022-05-01",
+              "name": "[parameters('funcStrName')]",
+              "location": "[parameters('region')]",
+              "kind": "StorageV2",
+              "sku": {
+                "name": "Standard_LRS"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2022-10-01",
+              "name": "[parameters('logAnalyticsName')]",
+              "location": "[parameters('region')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": 30,
+                "features": {
+                  "enableLogAccessUsingOnlyResourcePermissions": true
+                },
+                "workspaceCapping": {
+                  "dailyQuotaGb": -1
+                },
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[parameters('appInsightsName')]",
+              "location": "[parameters('region')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "Request_Source": "IbizaWebAppExtensionCreate",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2022-03-01",
+              "name": "[parameters('funcPlanName')]",
+              "location": "[parameters('region')]",
+              "kind": "elastic",
+              "sku": {
+                "name": "EP1",
+                "tier": "ElasticPremium",
+                "family": "EP"
+              },
+              "properties": {
+                "maximumElasticWorkerCount": 3
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2022-03-01",
+              "name": "[parameters('funcAppName')]",
+              "location": "[parameters('region')]",
+              "kind": "functionapp",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('funcPlanName'))]",
+                "clientAffinityEnabled": false,
+                "siteConfig": {
+                  "appSettings": [
+                    {
+                      "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                      "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appInsightsName')), '2020-02-02').InstrumentationKey]"
+                    },
+                    {
+                      "name": "AzureWebJobsStorage",
+                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('funcStrName')), '2022-05-01').keys[0].value)]"
+                    },
+                    {
+                      "name": "AzureWebJobsDashboard",
+                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('funcStrName')), '2022-05-01').keys[0].value)]"
+                    },
+                    {
+                      "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('funcStrName')), '2022-05-01').keys[0].value)]"
+                    },
+                    {
+                      "name": "WEBSITE_CONTENTSHARE",
+                      "value": "[toLower(parameters('funcAppName'))]"
+                    },
+                    {
+                      "name": "FUNCTIONS_EXTENSION_VERSION",
+                      "value": "~4"
+                    },
+                    {
+                      "name": "FUNCTIONS_WORKER_RUNTIME",
+                      "value": "dotnet"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/components', parameters('appInsightsName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', parameters('funcPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('funcStrName'))]"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "application",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "region": {
+            "value": "[parameters('region')]"
+          },
+          "funcAppName": {
+            "value": "[variables('funcAppName')]"
+          },
+          "dataStrName": {
+            "value": "[variables('dataStrName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.14.46.61228",
+              "templateHash": "10255259007323255025"
+            }
+          },
+          "parameters": {
+            "region": {
+              "type": "string"
+            },
+            "dataStrName": {
+              "type": "string"
+            },
+            "funcAppName": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "uploadContainerName": "archive-upload",
+            "extractedContainerName": "archive-extracted",
+            "addtionalSettings": {
+              "Project": "src"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2022-05-01",
+              "name": "[parameters('dataStrName')]",
+              "location": "[parameters('region')]",
+              "kind": "StorageV2",
+              "sku": {
+                "name": "Standard_LRS"
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2022-05-01",
+              "name": "[format('{0}/{1}/{2}', parameters('dataStrName'), 'default', variables('uploadContainerName'))]",
+              "properties": {
+                "publicAccess": "None"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('dataStrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2022-05-01",
+              "name": "[format('{0}/{1}/{2}', parameters('dataStrName'), 'default', variables('extractedContainerName'))]",
+              "properties": {
+                "publicAccess": "None"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('dataStrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "appendAppSettings",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "appName": {
+                    "value": "[parameters('funcAppName')]"
+                  },
+                  "setting1": {
+                    "value": "[list(format('Microsoft.Web/sites/{0}/config/appsettings', parameters('funcAppName')), '2022-03-01').properties]"
+                  },
+                  "setting2": {
+                    "value": "[variables('addtionalSettings')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "11562661143899395888"
+                    }
+                  },
+                  "parameters": {
+                    "appName": {
+                      "type": "string"
+                    },
+                    "setting1": {
+                      "type": "object"
+                    },
+                    "setting2": {
+                      "type": "object"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Web/sites/config",
+                      "apiVersion": "2022-03-01",
+                      "name": "[format('{0}/appsettings', parameters('appName'))]",
+                      "properties": "[union(parameters('setting1'), parameters('setting2'))]"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'platforn')]"
+      ]
+    }
+  ]
+}
