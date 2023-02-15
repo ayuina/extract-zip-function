@@ -1,0 +1,19 @@
+name: ExtractZipFunction
+version: 1.0.0
+summary: Azure Functions sample to extract zip file uploaded into blob container.
+description: Deploys functions app and sources, event source, and event grid.
+runner: ARM
+templatePath: main.json
+parameters:
+- id: "prefix"
+  name: "prefix"
+  description: "prefix name for unique id"
+  default: "demo"
+  type: "string"
+  required: true
+- id: "region"
+  name: "region"
+  description: "Azure region for deployed resources"
+  default: "japaneast"
+  type: "string"
+  required: true
