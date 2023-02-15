@@ -1,0 +1,12 @@
+{
+    "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+    "DataStorage": "UseDevelopmentStorage=true",
+    "eventbase_blobtrigger_container": "dummy",
+    "standard_blobtrigger_container": "dummy",
+    "blob_created_queue": "archive-upload-queue"
+
+  }
+}
