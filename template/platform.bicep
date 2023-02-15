@@ -1,9 +1,11 @@
+param prefix string
 param region string
-param funcStrName string
-param logAnalyticsName string
-param appInsightsName string
-param funcAppName string 
-param funcPlanName string 
+
+var funcStrName = '${prefix}funcstr'
+var logAnalyticsName = '${prefix}-laws'
+var appInsightsName = '${prefix}-ai'
+var funcAppName = '${prefix}-func'
+var funcPlanName = '${prefix}-func-plan'
 
 resource funcStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   name: funcStrName
@@ -101,3 +103,5 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
     }
   }
 }
+
+output funcAppName string = funcAppName
