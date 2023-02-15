@@ -81,6 +81,7 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' existing = {
 
 var addtionalSettings = {
   Project: 'src'
+  SCM_COMMAND_IDLE_TIMEOUT: '180'
   AzureWebJobsDataStorage: 'DefaultEndpointsProtocol=https;AccountName=${dataStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${dataStr.listKeys().keys[0].value}'
 }
 
@@ -127,9 +128,6 @@ resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
     topicType: 'Microsoft.Storage.StorageAccounts'
   }
 
-  dependsOn: [
-    appsettings, source
-  ]
 }
 
 resource subsc1 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15' = {
@@ -151,6 +149,9 @@ resource subsc1 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15'
       }
     }
   }
+  dependsOn: [
+    source
+  ]
 }
 
 resource queueSenderRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
@@ -194,6 +195,7 @@ resource subsc2 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15'
     }
   }
   dependsOn:[
+    blob_created_queue
     queueSenderAssign
   ]
 }
