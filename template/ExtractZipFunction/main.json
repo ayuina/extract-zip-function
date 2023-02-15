@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.14.46.61228",
-      "templateHash": "4416442604480388004"
+      "templateHash": "4280401248626418049"
     }
   },
   "parameters": {
@@ -22,7 +22,7 @@
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2020-10-01",
-      "name": "platforn",
+      "name": "platfornm",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -43,7 +43,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "11951705944047503204"
+              "templateHash": "5554339450598392902"
             }
           },
           "parameters": {
@@ -59,7 +59,8 @@
             "logAnalyticsName": "[format('{0}-laws', parameters('prefix'))]",
             "appInsightsName": "[format('{0}-ai', parameters('prefix'))]",
             "funcAppName": "[format('{0}-func', parameters('prefix'))]",
-            "funcPlanName": "[format('{0}-func-plan', parameters('prefix'))]"
+            "funcPlanName": "[format('{0}-func-plan', parameters('prefix'))]",
+            "funcSrcRepoUrl": "https://github.com/ayuina/extract-zip-function.git"
           },
           "resources": [
             {
@@ -162,6 +163,14 @@
                     {
                       "name": "FUNCTIONS_WORKER_RUNTIME",
                       "value": "dotnet"
+                    },
+                    {
+                      "name": "Project",
+                      "value": "src"
+                    },
+                    {
+                      "name": "SCM_COMMAND_IDLE_TIMEOUT",
+                      "value": "180"
                     }
                   ]
                 }
@@ -170,6 +179,19 @@
                 "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
                 "[resourceId('Microsoft.Web/serverfarms', variables('funcPlanName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites/sourcecontrols",
+              "apiVersion": "2022-03-01",
+              "name": "[format('{0}/{1}', variables('funcAppName'), 'web')]",
+              "properties": {
+                "repoUrl": "[variables('funcSrcRepoUrl')]",
+                "branch": "main",
+                "isManualIntegration": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('funcAppName'))]"
               ]
             }
           ],
@@ -185,7 +207,7 @@
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2020-10-01",
-      "name": "func",
+      "name": "bindings",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -199,7 +221,7 @@
             "value": "[parameters('region')]"
           },
           "funcAppName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platforn'), '2020-10-01').outputs.funcAppName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platfornm'), '2020-10-01').outputs.funcAppName.value]"
           }
         },
         "template": {
@@ -209,7 +231,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "4039267401779719200"
+              "templateHash": "4415170285054678970"
             }
           },
           "parameters": {
@@ -226,7 +248,6 @@
           "variables": {
             "dataStrName": "[format('{0}datastr', parameters('prefix'))]",
             "dataStrTopicName": "[format('{0}-topic', variables('dataStrName'))]",
-            "funcSrcRepoUrl": "https://github.com/ayuina/extract-zip-function.git",
             "eventSourceMap": {
               "eventbase_blobtrigger_container": "archive-upload-for-eventgrid",
               "standard_blobtrigger_container": "archive-upload-for-polling",
@@ -301,19 +322,6 @@
               ]
             },
             {
-              "type": "Microsoft.Web/sites/sourcecontrols",
-              "apiVersion": "2022-03-01",
-              "name": "[format('{0}/{1}', parameters('funcAppName'), 'web')]",
-              "properties": {
-                "repoUrl": "[variables('funcSrcRepoUrl')]",
-                "branch": "main",
-                "isManualIntegration": true
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'appendAppSettings')]"
-              ]
-            },
-            {
               "type": "Microsoft.EventGrid/systemTopics",
               "apiVersion": "2022-06-15",
               "name": "[variables('dataStrTopicName')]",
@@ -326,9 +334,7 @@
                 "topicType": "Microsoft.Storage.StorageAccounts"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'appendAppSettings')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                "[resourceId('Microsoft.Web/sites/sourcecontrols', parameters('funcAppName'), 'web')]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
               ]
             },
             {
@@ -352,6 +358,7 @@
                 }
               },
               "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStrName'), 'default', variables('eventSourceMap').eventbase_blobtrigger_container)]",
                 "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
               ]
             },
@@ -397,6 +404,7 @@
                 }
               },
               "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', variables('dataStrName'), 'default', variables('eventSourceMap').blob_created_queue)]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
                 "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName')), variables('queueSenderRoleid')))]",
                 "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
@@ -415,11 +423,8 @@
                   "appName": {
                     "value": "[parameters('funcAppName')]"
                   },
-                  "setting1": {
-                    "value": "[list(format('Microsoft.Web/sites/{0}/config/appsettings', parameters('funcAppName')), '2022-03-01').properties]"
-                  },
-                  "setting2": {
-                    "value": "[union(createObject('Project', 'src', 'AzureWebJobsDataStorage', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('dataStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), '2022-05-01').keys[0].value)), variables('eventSourceMap'))]"
+                  "settings": {
+                    "value": "[union(createObject('AzureWebJobsDataStorage', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('dataStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), '2022-05-01').keys[0].value)), variables('eventSourceMap'))]"
                   }
                 },
                 "template": {
@@ -429,17 +434,14 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.14.46.61228",
-                      "templateHash": "11562661143899395888"
+                      "templateHash": "3054015739528144869"
                     }
                   },
                   "parameters": {
                     "appName": {
                       "type": "string"
                     },
-                    "setting1": {
-                      "type": "object"
-                    },
-                    "setting2": {
+                    "settings": {
                       "type": "object"
                     }
                   },
@@ -448,25 +450,20 @@
                       "type": "Microsoft.Web/sites/config",
                       "apiVersion": "2022-03-01",
                       "name": "[format('{0}/appsettings', parameters('appName'))]",
-                      "properties": "[union(parameters('setting1'), parameters('setting2'))]"
+                      "properties": "[union(list(format('Microsoft.Web/sites/{0}/config/appsettings', parameters('appName')), '2022-03-01').properties, parameters('settings'))]"
                     }
                   ]
                 }
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', variables('dataStrName'), 'default', variables('eventSourceMap').blob_created_queue)]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStrName'), 'default', variables('eventSourceMap').eventbase_blobtrigger_container)]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStrName'), 'default', variables('eventSourceMap').extracted_container)]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStrName'), 'default', variables('eventSourceMap').queuetrigger_container)]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStrName'), 'default', variables('eventSourceMap').standard_blobtrigger_container)]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
               ]
             }
           ]
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', 'platforn')]"
+        "[resourceId('Microsoft.Resources/deployments', 'platfornm')]"
       ]
     }
   ]

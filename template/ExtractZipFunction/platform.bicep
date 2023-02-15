@@ -6,6 +6,7 @@ var logAnalyticsName = '${prefix}-laws'
 var appInsightsName = '${prefix}-ai'
 var funcAppName = '${prefix}-func'
 var funcPlanName = '${prefix}-func-plan'
+var funcSrcRepoUrl = 'https://github.com/ayuina/extract-zip-function.git'
 
 resource funcStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   name: funcStrName
@@ -99,9 +100,29 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           name: 'FUNCTIONS_WORKER_RUNTIME'
           value: 'dotnet'
         }
+        {
+          name: 'Project'
+          value: 'src'
+        }
+        {
+          name: 'SCM_COMMAND_IDLE_TIMEOUT'
+          value: '180'
+        }
       ]
     }
   }
 }
+
+resource source 'Microsoft.Web/sites/sourcecontrols@2022-03-01' = {
+  parent: funcApp
+  name: 'web'
+  properties: {
+    repoUrl: funcSrcRepoUrl
+    branch: 'main'
+    isManualIntegration: true
+  }
+}
+
+
 
 output funcAppName string = funcAppName

@@ -1,8 +1,7 @@
 param appName string
-param setting1 object
-param setting2 object
+param settings object
 
 resource appsettings 'Microsoft.Web/sites/config@2022-03-01' = {
   name: '${appName}/appsettings'
-  properties: union(setting1, setting2)
+  properties: union(list('Microsoft.Web/sites/${appName}/config/appsettings', '2022-03-01').properties, settings)
 }

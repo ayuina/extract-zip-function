@@ -4,7 +4,6 @@ param funcAppName string
 
 var dataStrName = '${prefix}datastr'
 var dataStrTopicName = '${dataStrName}-topic'
-var funcSrcRepoUrl = 'https://github.com/ayuina/extract-zip-function.git'
 
 var eventSourceMap = {
   eventbase_blobtrigger_container: 'archive-upload-for-eventgrid'
@@ -16,6 +15,8 @@ var eventSourceMap = {
 
 var eventbase_blobtrigger_function = 'ExtractArchive'
 var queueSenderRoleid = 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'
+
+
 
 resource dataStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   name: dataStrName
@@ -73,15 +74,11 @@ resource blob_created_queue 'Microsoft.Storage/storageAccounts/queueServices/que
   name: eventSourceMap.blob_created_queue
 }
 
-/// deploy application ///
-
 resource funcApp 'Microsoft.Web/sites@2022-03-01' existing = {
   name: funcAppName
 }
 
-var addtionalSettings = {
-  Project: 'src'
-  SCM_COMMAND_IDLE_TIMEOUT: '180'
+var additionalSettings = {
   AzureWebJobsDataStorage: 'DefaultEndpointsProtocol=https;AccountName=${dataStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${dataStr.listKeys().keys[0].value}'
 }
 
@@ -90,29 +87,8 @@ module appsettings 'mergeAppSettings.bicep' = {
   name: 'appendAppSettings'
   params: {
     appName: funcAppName
-    setting1: list('Microsoft.Web/sites/${funcAppName}/config/appsettings', '2022-03-01').properties
-    setting2: union(addtionalSettings, eventSourceMap)
+    settings: union(additionalSettings, eventSourceMap)
   }
-
-  dependsOn:[
-    extractedContainer 
-    eventbase_blobtrigger_container 
-    standard_blobtrigger_container
-    queuetrigger_container
-    blob_created_queue
-  ]
-}
-
-resource source 'Microsoft.Web/sites/sourcecontrols@2022-03-01' = {
-  parent: funcApp
-  name: 'web'
-  properties: {
-    repoUrl: funcSrcRepoUrl
-    branch: 'main'
-    isManualIntegration: true
-  }
-
-  dependsOn: [appsettings]
 }
 
 /// event grid ///
@@ -127,7 +103,6 @@ resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
     source: dataStr.id
     topicType: 'Microsoft.Storage.StorageAccounts'
   }
-
 }
 
 resource subsc1 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15' = {
@@ -149,8 +124,8 @@ resource subsc1 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15'
       }
     }
   }
-  dependsOn: [
-    source
+  dependsOn:[
+    eventbase_blobtrigger_container
   ]
 }
 
