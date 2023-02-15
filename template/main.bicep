@@ -7,7 +7,6 @@ var appInsightsName = '${prefix}-ai'
 var funcAppName = '${prefix}-func'
 var funcPlanName = '${prefix}-func-plan'
 
-var dataStrName = '${prefix}datastr'
 
 module platform './platform.bicep' = {
   name: 'platforn'
@@ -21,12 +20,12 @@ module platform './platform.bicep' = {
   }
 }
 
-module appplication 'application.bicep' = {
-  name: 'application'
+module appplication 'func.bicep' = {
+  name: 'func'
   params: {
+    prefix: prefix
     region: region
     funcAppName: funcAppName
-    dataStrName: dataStrName
   }
 
   dependsOn: [

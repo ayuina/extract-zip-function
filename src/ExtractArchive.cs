@@ -9,10 +9,12 @@ using System.Threading.Tasks;
 
 namespace extract_zip_function
 {
+    [StorageAccount("DataStorage")]
     public class ExtractArchive
     {
+        private const string outputContainer = "%extracted_container%";
+
         [FunctionName("ExtractArchive")]
-        [StorageAccount("DataStorage")]
         public async Task Run(
             [BlobTrigger("%eventbase_blobtrigger_container%/{name}", Source = BlobTriggerSource.EventGrid)] Stream myBlob, 
             string name,
@@ -36,7 +38,7 @@ namespace extract_zip_function
 
                     log.LogDebug($"extracting entry {idx++} : {entry.FullName}, original {entry.Length} bytes,  compressed {entry.CompressedLength} bytes");
                     var outputbind = new Attribute[]{
-                        new BlobAttribute($"archive-extracted/{prefix}_{name}_{entry.FullName}", FileAccess.Write)
+                        new BlobAttribute($"{outputContainer}/{prefix}_{name}_{entry.FullName}", FileAccess.Write)
                     };
                     using(var output = await binder.BindAsync<Stream>(outputbind))
                     {
@@ -50,7 +52,6 @@ namespace extract_zip_function
         }
 
         [FunctionName("ExtractArchive_StandardBlobTrigger")]
-        [StorageAccount("DataStorage")]
         public async Task Run2(
             [BlobTrigger("%standard_blobtrigger_container%/{name}", Source = BlobTriggerSource.LogsAndContainerScan)] Stream myBlob, 
             string name,
@@ -74,7 +75,7 @@ namespace extract_zip_function
 
                     log.LogDebug($"extracting entry {idx++} : {entry.FullName}, original {entry.Length} bytes,  compressed {entry.CompressedLength} bytes");
                     var outputbind = new Attribute[]{
-                        new BlobAttribute($"archive-extracted/{prefix}_{name}_{entry.FullName}", FileAccess.Write)
+                        new BlobAttribute($"{outputContainer}/{prefix}_{name}_{entry.FullName}", FileAccess.Write)
                     };
                     using(var output = await binder.BindAsync<Stream>(outputbind))
                     {
@@ -90,7 +91,6 @@ namespace extract_zip_function
         //https://learn.microsoft.com/ja-jp/azure/event-grid/managed-service-identity
 
         [FunctionName("ExtractArchive_QueueTrigger")]
-        [StorageAccount("DataStorage")]
         public async Task Run3(
             [QueueTrigger("%blob_created_queue%")] string queueMesageString,
             Binder binder,
@@ -124,7 +124,7 @@ namespace extract_zip_function
 
                     log.LogDebug($"extracting entry {idx++} : {entry.FullName}, original {entry.Length} bytes,  compressed {entry.CompressedLength} bytes");
                     var outputbind = new Attribute[]{
-                        new BlobAttribute($"archive-extracted/{prefix}_{entry.FullName}", FileAccess.Write)
+                        new BlobAttribute($"{outputContainer}/{prefix}_{entry.FullName}", FileAccess.Write)
                     };
                     using (var output = await binder.BindAsync<Stream>(outputbind))
                     {
