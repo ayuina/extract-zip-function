@@ -8,12 +8,12 @@ parameters:
 - id: "prefix"
   name: "prefix"
   description: "prefix name for unique id"
-  default: "demo"
+  default: "prefix-name"
   type: "string"
   required: true
 - id: "region"
   name: "region"
   description: "Azure region for deployed resources"
-  default: "japaneast"
+  default: "region-name"
   type: "string"
   required: true
