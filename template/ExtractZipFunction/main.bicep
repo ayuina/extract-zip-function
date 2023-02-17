@@ -2,7 +2,7 @@ param prefix string = 'ayuina0215b'
 param region string = 'westus3'
 
 module platform './platform.bicep' = {
-  name: 'platfornm'
+  name: 'platform'
   params: {
     prefix: prefix
     region: region

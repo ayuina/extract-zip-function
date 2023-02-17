@@ -83,11 +83,12 @@ var additionalSettings = {
 }
 
 //https://github.com/Azure/azure-cli/issues/11718
-module appsettings 'mergeAppSettings.bicep' = {
-  name: 'appendAppSettings'
+module mergeSettings 'mergeAppSettings.bicep' = {
+  name: 'mergeSettings'
   params: {
     appName: funcAppName
-    settings: union(additionalSettings, eventSourceMap)
+    settings1: list('Microsoft.Web/sites/${funcAppName}/config/appsettings', '2022-03-01').properties
+    settings2: union(additionalSettings, eventSourceMap)
   }
 }
 

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.14.46.61228",
-      "templateHash": "4280401248626418049"
+      "templateHash": "17770232383978583106"
     }
   },
   "parameters": {
@@ -22,7 +22,7 @@
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2020-10-01",
-      "name": "platfornm",
+      "name": "platform",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -221,7 +221,7 @@
             "value": "[parameters('region')]"
           },
           "funcAppName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platfornm'), '2020-10-01').outputs.funcAppName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platform'), '2020-10-01').outputs.funcAppName.value]"
           }
         },
         "template": {
@@ -231,7 +231,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "4415170285054678970"
+              "templateHash": "6744387062586576533"
             }
           },
           "parameters": {
@@ -413,7 +413,7 @@
             {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2020-10-01",
-              "name": "appendAppSettings",
+              "name": "mergeSettings",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -423,7 +423,10 @@
                   "appName": {
                     "value": "[parameters('funcAppName')]"
                   },
-                  "settings": {
+                  "settings1": {
+                    "value": "[list(format('Microsoft.Web/sites/{0}/config/appsettings', parameters('funcAppName')), '2022-03-01').properties]"
+                  },
+                  "settings2": {
                     "value": "[union(createObject('AzureWebJobsDataStorage', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('dataStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), '2022-05-01').keys[0].value)), variables('eventSourceMap'))]"
                   }
                 },
@@ -434,14 +437,17 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.14.46.61228",
-                      "templateHash": "3054015739528144869"
+                      "templateHash": "2863576707849206433"
                     }
                   },
                   "parameters": {
                     "appName": {
                       "type": "string"
                     },
-                    "settings": {
+                    "settings1": {
+                      "type": "object"
+                    },
+                    "settings2": {
                       "type": "object"
                     }
                   },
@@ -450,7 +456,7 @@
                       "type": "Microsoft.Web/sites/config",
                       "apiVersion": "2022-03-01",
                       "name": "[format('{0}/appsettings', parameters('appName'))]",
-                      "properties": "[union(list(format('Microsoft.Web/sites/{0}/config/appsettings', parameters('appName')), '2022-03-01').properties, parameters('settings'))]"
+                      "properties": "[union(parameters('settings1'), parameters('settings2'))]"
                     }
                   ]
                 }
@@ -463,7 +469,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', 'platfornm')]"
+        "[resourceId('Microsoft.Resources/deployments', 'platform')]"
       ]
     }
   ]
