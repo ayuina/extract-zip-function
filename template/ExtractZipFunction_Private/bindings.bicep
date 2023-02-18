@@ -104,4 +104,3 @@ resource subsc2 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15'
   }
 }
 
-output eventGridEndpoint string = 'https://${funcApp.properties.hostNames[0]}/runtime/webhooks/blobs?functionName=${eventbase_blobtrigger_function}&code=${listkeys('${funcApp.id}/host/default', '2022-03-01').systemKeys.blobs_extension}'

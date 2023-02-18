@@ -13,6 +13,15 @@ module infra './infrastructure.bicep' = {
   }
 }
 
+var eventSourceMap = {
+  eventbase_blobtrigger_container: 'archive-upload-for-eventgrid'
+  standard_blobtrigger_container:'archive-upload-for-polling'
+  queuetrigger_container: 'archive-upload-for-queue'
+  blob_created_queue:'archive-upload-queue'
+  extracted_container: 'archive-extracted'
+}
+
+
 module platform './platform.bicep' = {
   name: 'platform'
   params: {
@@ -24,14 +33,18 @@ module platform './platform.bicep' = {
     funcStrName: infra.outputs.funcStrName
     dataStrName: infra.outputs.dataStrName
     runFromPackageUrl: runFromPackageUrl
+    eventSourceMap: eventSourceMap
   }
 }
 
-// module appplication './bindings.bicep' = {
-//   name: 'bindings'
-//   params: {
-//     region: region
-//     funcAppName: platform.outputs.funcAppName
-//     dataStrName: platform.outputs.dataStrName
-//   }
-// }
+module appplication './bindings.bicep' = {
+  name: 'bindings'
+  params: {
+    region: region
+    funcAppName: platform.outputs.funcAppName
+    dataStrName: platform.outputs.dataStrName
+    eventbaseBlobTriggerContainerName: eventSourceMap.eventbase_blobtrigger_container
+    enqueueTriggerCotainerName: eventSourceMap.queuetrigger_container
+    blobCreatedQueueName: eventSourceMap.blob_created_queue
+  }
+}

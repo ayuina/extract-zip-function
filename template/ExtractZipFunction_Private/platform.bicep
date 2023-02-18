@@ -6,6 +6,7 @@ param funcsubnetName string
 param runFromPackageUrl string
 param funcStrName string
 param dataStrName string
+param eventSourceMap object
 
 var logAnalyticsName = '${prefix}-laws'
 var appInsightsName = '${prefix}-ai'
@@ -14,13 +15,6 @@ var funcAppName = '${prefix}-func'
 var funcPlanName = '${prefix}-func-plan'
 var funcFilesName = toLower(funcAppName)
 
-var eventSourceMap = {
-  eventbase_blobtrigger_container: 'archive-upload-for-eventgrid'
-  standard_blobtrigger_container:'archive-upload-for-polling'
-  queuetrigger_container: 'archive-upload-for-queue'
-  blob_created_queue:'archive-upload-queue'
-  extracted_container: 'archive-extracted'
-}
 
 resource funcStr 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
   name: funcStrName
@@ -244,3 +238,4 @@ output funcAppName string = funcAppName
 output vnetName string = vnetName
 output pesubnetName string = pesubnetName
 output dataStrName string = dataStrName
+output eventSourceMap object = eventSourceMap
