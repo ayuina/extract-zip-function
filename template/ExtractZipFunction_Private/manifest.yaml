@@ -17,3 +17,15 @@ parameters:
   default: "region-name"
   type: "string"
   required: true
+- id: "runFromPackageUrl"
+  name: "runFromPackageUrl"
+  description: "Url of ZipDeployment package for functions "
+  default: "https://hoge.fuga/piyo.zip"
+  type: "string"
+  required: true
+- id: "privateNetworkRange24"
+  name: "privateNetworkRange24"
+  description: "Azure VNET address range like 10.1.1"
+  default: "xx.yy.zz"
+  type: "string"
+  required: true
