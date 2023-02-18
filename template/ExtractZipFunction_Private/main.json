@@ -5,24 +5,37 @@
     "_generator": {
       "name": "bicep",
       "version": "0.14.46.61228",
-      "templateHash": "723236074833404619"
+      "templateHash": "3236897701262203497"
     }
   },
   "parameters": {
     "prefix": {
-      "type": "string",
-      "defaultValue": "ayuina0215b"
+      "type": "string"
     },
     "region": {
-      "type": "string",
-      "defaultValue": "westus3"
+      "type": "string"
+    },
+    "privateNetworkRange24": {
+      "type": "string"
+    },
+    "runFromPackageUrl": {
+      "type": "string"
+    }
+  },
+  "variables": {
+    "eventSourceMap": {
+      "eventbase_blobtrigger_container": "archive-upload-for-eventgrid",
+      "standard_blobtrigger_container": "archive-upload-for-polling",
+      "queuetrigger_container": "archive-upload-for-queue",
+      "blob_created_queue": "archive-upload-queue",
+      "extracted_container": "archive-extracted"
     }
   },
   "resources": [
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2020-10-01",
-      "name": "network",
+      "name": "infra",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -34,6 +47,9 @@
           },
           "region": {
             "value": "[parameters('region')]"
+          },
+          "vnetaddressPrefix24": {
+            "value": "[parameters('privateNetworkRange24')]"
           }
         },
         "template": {
@@ -43,7 +59,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "9206085069430861184"
+              "templateHash": "12241978332865213040"
             }
           },
           "parameters": {
@@ -52,10 +68,13 @@
             },
             "region": {
               "type": "string"
+            },
+            "vnetaddressPrefix24": {
+              "type": "string"
             }
           },
           "variables": {
-            "vnetRootRange24": "10.0.0",
+            "vnetRootRange24": "[parameters('vnetaddressPrefix24')]",
             "vnetName": "[format('{0}-vnet', parameters('prefix'))]",
             "vnetRange": "[format('{0}.0/24', variables('vnetRootRange24'))]",
             "pesubnetName": "private-endpoint-subnet",
@@ -64,7 +83,13 @@
             "funcsubnetRange": "[format('{0}.64/26', variables('vnetRootRange24'))]",
             "appsvcZoneName": "privatelink.azurewebsites.net",
             "blobZoneName": "[format('privatelink.blob.{0}', environment().suffixes.storage)]",
-            "queueZoneName": "[format('privatelink.queue.{0}', environment().suffixes.storage)]"
+            "queueZoneName": "[format('privatelink.queue.{0}', environment().suffixes.storage)]",
+            "tableZoneName": "[format('privatelink.table.{0}', environment().suffixes.storage)]",
+            "fileZoneName": "[format('privatelink.file.{0}', environment().suffixes.storage)]",
+            "funcStrName": "[format('{0}funcstr', replace(parameters('prefix'), '-', ''))]",
+            "dataStrName": "[format('{0}datastr', replace(parameters('prefix'), '-', ''))]",
+            "dataStrTopicName": "[format('{0}-topic', variables('dataStrName'))]",
+            "dataStrTopicIdName": "[format('{0}-uami', variables('dataStrTopicName'))]"
           },
           "resources": [
             {
@@ -112,6 +137,38 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Network/privateDnsZones', variables('queueZoneName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', variables('tableZoneName'), 'tableZone-link')]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('tableZoneName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', variables('fileZoneName'), 'fileZone-link')]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('fileZoneName'))]",
                 "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
               ]
             },
@@ -167,6 +224,819 @@
               "apiVersion": "2020-06-01",
               "name": "[variables('queueZoneName')]",
               "location": "global"
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "[variables('tableZoneName')]",
+              "location": "global"
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "[variables('fileZoneName')]",
+              "location": "global"
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2022-05-01",
+              "name": "[variables('funcStrName')]",
+              "location": "[parameters('region')]",
+              "kind": "StorageV2",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "properties": {
+                "allowBlobPublicAccess": false,
+                "networkAcls": {
+                  "bypass": "None",
+                  "defaultAction": "Deny"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2022-05-01",
+              "name": "[variables('dataStrName')]",
+              "location": "[parameters('region')]",
+              "kind": "StorageV2",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "properties": {
+                "allowBlobPublicAccess": false,
+                "networkAcls": {
+                  "resourceAccessRules": [
+                    {
+                      "tenantId": "[tenant().tenantId]",
+                      "resourceId": "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
+                    }
+                  ],
+                  "bypass": "AzureServices",
+                  "defaultAction": "Deny"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2022-01-31-preview",
+              "name": "[variables('dataStrTopicIdName')]",
+              "location": "[parameters('region')]"
+            },
+            {
+              "type": "Microsoft.EventGrid/systemTopics",
+              "apiVersion": "2022-06-15",
+              "name": "[variables('dataStrTopicName')]",
+              "location": "[parameters('region')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName')))]": {}
+                }
+              },
+              "properties": {
+                "source": "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
+                "topicType": "Microsoft.Storage.StorageAccounts"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('dataStrName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a')]",
+                "principalType": "ServicePrincipal",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName')), '2022-01-31-preview').principalId]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "funcstr-blob-pe",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "region": {
+                    "value": "[parameters('region')]"
+                  },
+                  "svcname": {
+                    "value": "[variables('funcStrName')]"
+                  },
+                  "svctype": {
+                    "value": "Microsoft.Storage/storageAccounts"
+                  },
+                  "zonename": {
+                    "value": "[variables('blobZoneName')]"
+                  },
+                  "groupId": {
+                    "value": "blob"
+                  },
+                  "vnetName": {
+                    "value": "[variables('vnetName')]"
+                  },
+                  "pesubnetName": {
+                    "value": "[variables('pesubnetName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "15790817288533340525"
+                    }
+                  },
+                  "parameters": {
+                    "vnetName": {
+                      "type": "string"
+                    },
+                    "pesubnetName": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "svcname": {
+                      "type": "string"
+                    },
+                    "svctype": {
+                      "type": "string"
+                    },
+                    "zonename": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
+                    "peNicName": "[format('{0}-nic', variables('pename'))]",
+                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2022-07-01",
+                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": [
+                          {
+                            "name": "config",
+                            "properties": {
+                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2022-07-01",
+                      "name": "[variables('pename')]",
+                      "location": "[parameters('region')]",
+                      "properties": {
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[variables('pename')]",
+                            "properties": {
+                              "privateLinkServiceId": "[variables('svcid')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ],
+                        "customNetworkInterfaceName": "[variables('peNicName')]",
+                        "subnet": {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('blobZoneName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "funcstr-queue-pe",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "region": {
+                    "value": "[parameters('region')]"
+                  },
+                  "svcname": {
+                    "value": "[variables('funcStrName')]"
+                  },
+                  "svctype": {
+                    "value": "Microsoft.Storage/storageAccounts"
+                  },
+                  "zonename": {
+                    "value": "[variables('queueZoneName')]"
+                  },
+                  "groupId": {
+                    "value": "queue"
+                  },
+                  "vnetName": {
+                    "value": "[variables('vnetName')]"
+                  },
+                  "pesubnetName": {
+                    "value": "[variables('pesubnetName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "15790817288533340525"
+                    }
+                  },
+                  "parameters": {
+                    "vnetName": {
+                      "type": "string"
+                    },
+                    "pesubnetName": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "svcname": {
+                      "type": "string"
+                    },
+                    "svctype": {
+                      "type": "string"
+                    },
+                    "zonename": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
+                    "peNicName": "[format('{0}-nic', variables('pename'))]",
+                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2022-07-01",
+                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": [
+                          {
+                            "name": "config",
+                            "properties": {
+                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2022-07-01",
+                      "name": "[variables('pename')]",
+                      "location": "[parameters('region')]",
+                      "properties": {
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[variables('pename')]",
+                            "properties": {
+                              "privateLinkServiceId": "[variables('svcid')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ],
+                        "customNetworkInterfaceName": "[variables('peNicName')]",
+                        "subnet": {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName'))]",
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('queueZoneName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "funcstr-table-pe",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "region": {
+                    "value": "[parameters('region')]"
+                  },
+                  "svcname": {
+                    "value": "[variables('funcStrName')]"
+                  },
+                  "svctype": {
+                    "value": "Microsoft.Storage/storageAccounts"
+                  },
+                  "zonename": {
+                    "value": "[variables('tableZoneName')]"
+                  },
+                  "groupId": {
+                    "value": "table"
+                  },
+                  "vnetName": {
+                    "value": "[variables('vnetName')]"
+                  },
+                  "pesubnetName": {
+                    "value": "[variables('pesubnetName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "15790817288533340525"
+                    }
+                  },
+                  "parameters": {
+                    "vnetName": {
+                      "type": "string"
+                    },
+                    "pesubnetName": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "svcname": {
+                      "type": "string"
+                    },
+                    "svctype": {
+                      "type": "string"
+                    },
+                    "zonename": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
+                    "peNicName": "[format('{0}-nic', variables('pename'))]",
+                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2022-07-01",
+                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": [
+                          {
+                            "name": "config",
+                            "properties": {
+                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2022-07-01",
+                      "name": "[variables('pename')]",
+                      "location": "[parameters('region')]",
+                      "properties": {
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[variables('pename')]",
+                            "properties": {
+                              "privateLinkServiceId": "[variables('svcid')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ],
+                        "customNetworkInterfaceName": "[variables('peNicName')]",
+                        "subnet": {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName'))]",
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('tableZoneName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "funcstr-file-pe",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "region": {
+                    "value": "[parameters('region')]"
+                  },
+                  "svcname": {
+                    "value": "[variables('funcStrName')]"
+                  },
+                  "svctype": {
+                    "value": "Microsoft.Storage/storageAccounts"
+                  },
+                  "zonename": {
+                    "value": "[variables('fileZoneName')]"
+                  },
+                  "groupId": {
+                    "value": "file"
+                  },
+                  "vnetName": {
+                    "value": "[variables('vnetName')]"
+                  },
+                  "pesubnetName": {
+                    "value": "[variables('pesubnetName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "15790817288533340525"
+                    }
+                  },
+                  "parameters": {
+                    "vnetName": {
+                      "type": "string"
+                    },
+                    "pesubnetName": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "svcname": {
+                      "type": "string"
+                    },
+                    "svctype": {
+                      "type": "string"
+                    },
+                    "zonename": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
+                    "peNicName": "[format('{0}-nic', variables('pename'))]",
+                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2022-07-01",
+                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": [
+                          {
+                            "name": "config",
+                            "properties": {
+                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2022-07-01",
+                      "name": "[variables('pename')]",
+                      "location": "[parameters('region')]",
+                      "properties": {
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[variables('pename')]",
+                            "properties": {
+                              "privateLinkServiceId": "[variables('svcid')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ],
+                        "customNetworkInterfaceName": "[variables('peNicName')]",
+                        "subnet": {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('fileZoneName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "datastr-blob-pe",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "region": {
+                    "value": "[parameters('region')]"
+                  },
+                  "svcname": {
+                    "value": "[variables('dataStrName')]"
+                  },
+                  "svctype": {
+                    "value": "Microsoft.Storage/storageAccounts"
+                  },
+                  "zonename": {
+                    "value": "[variables('blobZoneName')]"
+                  },
+                  "groupId": {
+                    "value": "blob"
+                  },
+                  "vnetName": {
+                    "value": "[variables('vnetName')]"
+                  },
+                  "pesubnetName": {
+                    "value": "[variables('pesubnetName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "15790817288533340525"
+                    }
+                  },
+                  "parameters": {
+                    "vnetName": {
+                      "type": "string"
+                    },
+                    "pesubnetName": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "svcname": {
+                      "type": "string"
+                    },
+                    "svctype": {
+                      "type": "string"
+                    },
+                    "zonename": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
+                    "peNicName": "[format('{0}-nic', variables('pename'))]",
+                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2022-07-01",
+                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": [
+                          {
+                            "name": "config",
+                            "properties": {
+                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2022-07-01",
+                      "name": "[variables('pename')]",
+                      "location": "[parameters('region')]",
+                      "properties": {
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[variables('pename')]",
+                            "properties": {
+                              "privateLinkServiceId": "[variables('svcid')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ],
+                        "customNetworkInterfaceName": "[variables('peNicName')]",
+                        "subnet": {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('blobZoneName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "datastr-queue-pe",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "region": {
+                    "value": "[parameters('region')]"
+                  },
+                  "svcname": {
+                    "value": "[variables('dataStrName')]"
+                  },
+                  "svctype": {
+                    "value": "Microsoft.Storage/storageAccounts"
+                  },
+                  "zonename": {
+                    "value": "[variables('queueZoneName')]"
+                  },
+                  "groupId": {
+                    "value": "queue"
+                  },
+                  "vnetName": {
+                    "value": "[variables('vnetName')]"
+                  },
+                  "pesubnetName": {
+                    "value": "[variables('pesubnetName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "15790817288533340525"
+                    }
+                  },
+                  "parameters": {
+                    "vnetName": {
+                      "type": "string"
+                    },
+                    "pesubnetName": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "svcname": {
+                      "type": "string"
+                    },
+                    "svctype": {
+                      "type": "string"
+                    },
+                    "zonename": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    }
+                  },
+                  "variables": {
+                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
+                    "peNicName": "[format('{0}-nic', variables('pename'))]",
+                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2022-07-01",
+                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": [
+                          {
+                            "name": "config",
+                            "properties": {
+                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2022-07-01",
+                      "name": "[variables('pename')]",
+                      "location": "[parameters('region')]",
+                      "properties": {
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[variables('pename')]",
+                            "properties": {
+                              "privateLinkServiceId": "[variables('svcid')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ],
+                        "customNetworkInterfaceName": "[variables('peNicName')]",
+                        "subnet": {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('queueZoneName'))]"
+              ]
             }
           ],
           "outputs": {
@@ -181,6 +1051,22 @@
             "funcsubnetName": {
               "type": "string",
               "value": "[variables('funcsubnetName')]"
+            },
+            "funcStrName": {
+              "type": "string",
+              "value": "[variables('funcStrName')]"
+            },
+            "dataStrName": {
+              "type": "string",
+              "value": "[variables('dataStrName')]"
+            },
+            "dataStrTopicName": {
+              "type": "string",
+              "value": "[variables('dataStrTopicName')]"
+            },
+            "dataStrTopicIdName": {
+              "type": "string",
+              "value": "[variables('dataStrTopicIdName')]"
             }
           }
         }
@@ -203,13 +1089,25 @@
             "value": "[parameters('region')]"
           },
           "vnetName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network'), '2020-10-01').outputs.vnetName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.vnetName.value]"
           },
           "funcsubnetName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network'), '2020-10-01').outputs.funcsubnetName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.funcsubnetName.value]"
           },
           "pesubnetName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network'), '2020-10-01').outputs.pesubnetName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.pesubnetName.value]"
+          },
+          "funcStrName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.funcStrName.value]"
+          },
+          "dataStrName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.dataStrName.value]"
+          },
+          "runFromPackageUrl": {
+            "value": "[parameters('runFromPackageUrl')]"
+          },
+          "eventSourceMap": {
+            "value": "[variables('eventSourceMap')]"
           }
         },
         "template": {
@@ -219,7 +1117,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "10627928833298030292"
+              "templateHash": "11163124432520551249"
             }
           },
           "parameters": {
@@ -237,25 +1135,57 @@
             },
             "funcsubnetName": {
               "type": "string"
+            },
+            "runFromPackageUrl": {
+              "type": "string"
+            },
+            "funcStrName": {
+              "type": "string"
+            },
+            "dataStrName": {
+              "type": "string"
+            },
+            "eventSourceMap": {
+              "type": "object"
             }
           },
           "variables": {
-            "funcStrName": "[format('{0}funcstr', replace(parameters('prefix'), '-', ''))]",
             "logAnalyticsName": "[format('{0}-laws', parameters('prefix'))]",
             "appInsightsName": "[format('{0}-ai', parameters('prefix'))]",
             "funcAppName": "[format('{0}-func', parameters('prefix'))]",
-            "funcPlanName": "[format('{0}-func-plan', parameters('prefix'))]"
+            "funcPlanName": "[format('{0}-func-plan', parameters('prefix'))]",
+            "funcFilesName": "[toLower(variables('funcAppName'))]"
           },
           "resources": [
             {
-              "type": "Microsoft.Storage/storageAccounts",
-              "apiVersion": "2022-05-01",
-              "name": "[variables('funcStrName')]",
-              "location": "[parameters('region')]",
-              "kind": "StorageV2",
-              "sku": {
-                "name": "Standard_LRS"
-              }
+              "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+              "apiVersion": "2022-09-01",
+              "name": "[format('{0}/{1}/{2}', parameters('funcStrName'), 'default', variables('funcFilesName'))]"
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2022-09-01",
+              "name": "[format('{0}/{1}/{2}', parameters('dataStrName'), 'default', parameters('eventSourceMap').extracted_container)]"
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2022-09-01",
+              "name": "[format('{0}/{1}/{2}', parameters('dataStrName'), 'default', parameters('eventSourceMap').eventbase_blobtrigger_container)]"
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2022-09-01",
+              "name": "[format('{0}/{1}/{2}', parameters('dataStrName'), 'default', parameters('eventSourceMap').standard_blobtrigger_container)]"
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2022-09-01",
+              "name": "[format('{0}/{1}/{2}', parameters('dataStrName'), 'default', parameters('eventSourceMap').queuetrigger_container)]"
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+              "apiVersion": "2022-09-01",
+              "name": "[format('{0}/{1}/{2}', parameters('dataStrName'), 'default', parameters('eventSourceMap').blob_created_queue)]"
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces",
@@ -324,6 +1254,7 @@
                   "vnetRouteAllEnabled": true,
                   "functionsRuntimeScaleMonitoringEnabled": true,
                   "publicNetworkAccess": "Enabled",
+                  "ipSecurityRestrictionsDefaultAction": "Deny",
                   "ipSecurityRestrictions": [
                     {
                       "priority": 1000,
@@ -331,44 +1262,12 @@
                       "action": "Allow",
                       "tag": "ServiceTag",
                       "ipAddress": "AzureEventGrid"
-                    },
-                    {
-                      "priority": 100000,
-                      "name": "deny-all-inbound",
-                      "action": "Deny",
-                      "ipAddress": "Any"
                     }
                   ],
                   "scmIpSecurityRestrictionsUseMain": true,
-                  "scmIpSecurityRestrictions": [
-                    {
-                      "priority": 100000,
-                      "name": "deny-all-inbound",
-                      "action": "Deny",
-                      "ipAddress": "Any"
-                    }
-                  ],
+                  "scmIpSecurityRestrictionsDefaultAction": "Deny",
+                  "scmIpSecurityRestrictions": [],
                   "appSettings": [
-                    {
-                      "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-                      "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]"
-                    },
-                    {
-                      "name": "AzureWebJobsStorage",
-                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName')), '2022-05-01').keys[0].value)]"
-                    },
-                    {
-                      "name": "AzureWebJobsDashboard",
-                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName')), '2022-05-01').keys[0].value)]"
-                    },
-                    {
-                      "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName')), '2022-05-01').keys[0].value)]"
-                    },
-                    {
-                      "name": "WEBSITE_CONTENTSHARE",
-                      "value": "[toLower(variables('funcAppName'))]"
-                    },
                     {
                       "name": "FUNCTIONS_EXTENSION_VERSION",
                       "value": "~4"
@@ -378,20 +1277,98 @@
                       "value": "dotnet"
                     },
                     {
-                      "name": "Project",
-                      "value": "src"
+                      "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                      "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]"
                     },
                     {
-                      "name": "SCM_COMMAND_IDLE_TIMEOUT",
-                      "value": "180"
+                      "name": "AzureWebJobsStorage",
+                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('funcStrName')), '2022-09-01').keys[0].value)]"
+                    },
+                    {
+                      "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('funcStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('funcStrName')), '2022-09-01').keys[0].value)]"
+                    },
+                    {
+                      "name": "WEBSITE_CONTENTSHARE",
+                      "value": "[variables('funcFilesName')]"
+                    },
+                    {
+                      "name": "WEBSITE_CONTENTOVERVNET",
+                      "value": "1"
+                    },
+                    {
+                      "name": "WEBSITE_DNS_SERVER",
+                      "value": "168.63.129.16"
+                    },
+                    {
+                      "name": "AzureWebJobsDataStorage",
+                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('dataStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('dataStrName')), '2022-09-01').keys[0].value)]"
+                    },
+                    {
+                      "name": "WEBSITE_RUN_FROM_PACKAGE",
+                      "value": "[parameters('runFromPackageUrl')]"
                     }
                   ]
                 }
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
-                "[resourceId('Microsoft.Web/serverfarms', variables('funcPlanName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStrName'))]"
+                "[resourceId('Microsoft.Web/serverfarms', variables('funcPlanName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2020-10-01",
+              "name": "mergeSettings",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "appName": {
+                    "value": "[variables('funcAppName')]"
+                  },
+                  "settings1": {
+                    "value": "[list(format('Microsoft.Web/sites/{0}/config/appsettings', variables('funcAppName')), '2022-03-01').properties]"
+                  },
+                  "settings2": {
+                    "value": "[parameters('eventSourceMap')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.14.46.61228",
+                      "templateHash": "2863576707849206433"
+                    }
+                  },
+                  "parameters": {
+                    "appName": {
+                      "type": "string"
+                    },
+                    "settings1": {
+                      "type": "object"
+                    },
+                    "settings2": {
+                      "type": "object"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Web/sites/config",
+                      "apiVersion": "2022-03-01",
+                      "name": "[format('{0}/appsettings', parameters('appName'))]",
+                      "properties": "[union(parameters('settings1'), parameters('settings2'))]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('funcAppName'))]"
               ]
             },
             {
@@ -526,12 +1503,20 @@
             "pesubnetName": {
               "type": "string",
               "value": "[parameters('pesubnetName')]"
+            },
+            "dataStrName": {
+              "type": "string",
+              "value": "[parameters('dataStrName')]"
+            },
+            "eventSourceMap": {
+              "type": "object",
+              "value": "[parameters('eventSourceMap')]"
             }
           }
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', 'network')]"
+        "[resourceId('Microsoft.Resources/deployments', 'infra')]"
       ]
     },
     {
@@ -544,20 +1529,29 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "prefix": {
-            "value": "[parameters('prefix')]"
-          },
           "region": {
             "value": "[parameters('region')]"
           },
           "funcAppName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platform'), '2020-10-01').outputs.funcAppName.value]"
           },
-          "vnetName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platform'), '2020-10-01').outputs.vnetName.value]"
+          "dataStrName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platform'), '2020-10-01').outputs.dataStrName.value]"
           },
-          "pesubnetName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platform'), '2020-10-01').outputs.pesubnetName.value]"
+          "eventbaseBlobTriggerContainerName": {
+            "value": "[variables('eventSourceMap').eventbase_blobtrigger_container]"
+          },
+          "enqueueTriggerCotainerName": {
+            "value": "[variables('eventSourceMap').queuetrigger_container]"
+          },
+          "blobCreatedQueueName": {
+            "value": "[variables('eventSourceMap').blob_created_queue]"
+          },
+          "dataStrTopicName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.dataStrTopicName.value]"
+          },
+          "dataStrTopicIdName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.dataStrTopicIdName.value]"
           }
         },
         "template": {
@@ -567,143 +1561,47 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "15586183207139362143"
+              "templateHash": "9631464589078057986"
             }
           },
           "parameters": {
-            "prefix": {
-              "type": "string"
-            },
             "region": {
-              "type": "string"
-            },
-            "vnetName": {
-              "type": "string"
-            },
-            "pesubnetName": {
               "type": "string"
             },
             "funcAppName": {
               "type": "string"
+            },
+            "dataStrName": {
+              "type": "string"
+            },
+            "eventbaseBlobTriggerContainerName": {
+              "type": "string"
+            },
+            "enqueueTriggerCotainerName": {
+              "type": "string"
+            },
+            "blobCreatedQueueName": {
+              "type": "string"
+            },
+            "dataStrTopicName": {
+              "type": "string"
+            },
+            "dataStrTopicIdName": {
+              "type": "string"
             }
           },
           "variables": {
-            "dataStrName": "[format('{0}datastr', replace(parameters('prefix'), '-', ''))]",
-            "dataStrBlobPeName": "[format('{0}-blob-pe', variables('dataStrName'))]",
-            "dataStrQueuePeName": "[format('{0}-queue-pe', variables('dataStrName'))]",
-            "dataStrTopicName": "[format('{0}-topic', variables('dataStrName'))]",
-            "eventSourceMap": {
-              "eventbase_blobtrigger_container": "archive-upload-for-eventgrid",
-              "standard_blobtrigger_container": "archive-upload-for-polling",
-              "queuetrigger_container": "archive-upload-for-queue",
-              "blob_created_queue": "archive-upload-queue",
-              "extracted_container": "archive-extracted"
-            },
-            "eventbase_blobtrigger_function": "ExtractArchive",
-            "queueSenderRoleid": "c6a89b2d-59bc-44d0-9896-0f6e12d7b80a",
-            "funcSrcRepoUrl": "https://github.com/ayuina/extract-zip-function.git"
+            "eventbaseBlobtriggerFunctionName": "ExtractArchive"
           },
           "resources": [
             {
-              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-              "apiVersion": "2022-05-01",
-              "name": "[format('{0}/{1}/{2}', variables('dataStrName'), 'default', variables('eventSourceMap').extracted_container)]",
-              "properties": {
-                "publicAccess": "None"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-              "apiVersion": "2022-05-01",
-              "name": "[format('{0}/{1}/{2}', variables('dataStrName'), 'default', variables('eventSourceMap').eventbase_blobtrigger_container)]",
-              "properties": {
-                "publicAccess": "None"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-              "apiVersion": "2022-05-01",
-              "name": "[format('{0}/{1}/{2}', variables('dataStrName'), 'default', variables('eventSourceMap').standard_blobtrigger_container)]",
-              "properties": {
-                "publicAccess": "None"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-              "apiVersion": "2022-05-01",
-              "name": "[format('{0}/{1}/{2}', variables('dataStrName'), 'default', variables('eventSourceMap').queuetrigger_container)]",
-              "properties": {
-                "publicAccess": "None"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
-              "apiVersion": "2022-05-01",
-              "name": "[format('{0}/{1}/{2}', variables('dataStrName'), 'default', variables('eventSourceMap').blob_created_queue)]",
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Storage/storageAccounts",
-              "apiVersion": "2022-05-01",
-              "name": "[variables('dataStrName')]",
-              "location": "[parameters('region')]",
-              "kind": "StorageV2",
-              "sku": {
-                "name": "Standard_LRS"
-              }
-            },
-            {
-              "type": "Microsoft.Web/sites/sourcecontrols",
-              "apiVersion": "2022-03-01",
-              "name": "[format('{0}/{1}', parameters('funcAppName'), 'web')]",
-              "properties": {
-                "repoUrl": "[variables('funcSrcRepoUrl')]",
-                "branch": "main",
-                "isManualIntegration": true
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'mergeSettings')]"
-              ]
-            },
-            {
-              "type": "Microsoft.EventGrid/systemTopics",
-              "apiVersion": "2022-06-15",
-              "name": "[variables('dataStrTopicName')]",
-              "location": "[parameters('region')]",
-              "identity": {
-                "type": "SystemAssigned"
-              },
-              "properties": {
-                "source": "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                "topicType": "Microsoft.Storage.StorageAccounts"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Web/sites/sourcecontrols', parameters('funcAppName'), 'web')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
               "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}/{1}', variables('dataStrTopicName'), 'ZipUploaded')]",
+              "name": "[format('{0}/{1}', parameters('dataStrTopicName'), 'ZipUploaded')]",
               "properties": {
                 "eventDeliverySchema": "EventGridSchema",
                 "filter": {
-                  "subjectBeginsWith": "[format('/blobServices/default/containers/{0}/', variables('eventSourceMap').eventbase_blobtrigger_container)]",
+                  "subjectBeginsWith": "[format('/blobServices/default/containers/{0}/', parameters('eventbaseBlobTriggerContainerName'))]",
                   "subjectEndsWith": ".zip",
                   "includedEventTypes": [
                     "Microsoft.Storage.BlobCreated"
@@ -712,38 +1610,19 @@
                 "destination": {
                   "endpointType": "WebHook",
                   "properties": {
-                    "endpointUrl": "[format('https://{0}/runtime/webhooks/blobs?functionName={1}&code={2}', reference(resourceId('Microsoft.Web/sites', parameters('funcAppName')), '2022-03-01').hostNames[0], variables('eventbase_blobtrigger_function'), listkeys(format('{0}/host/default', resourceId('Microsoft.Web/sites', parameters('funcAppName'))), '2022-03-01').systemKeys.blobs_extension)]"
+                    "endpointUrl": "[format('https://{0}/runtime/webhooks/blobs?functionName={1}&code={2}', reference(resourceId('Microsoft.Web/sites', parameters('funcAppName')), '2022-03-01').hostNames[0], variables('eventbaseBlobtriggerFunctionName'), listkeys(format('{0}/host/default', resourceId('Microsoft.Web/sites', parameters('funcAppName'))), '2022-03-01').systemKeys.blobs_extension)]"
                   }
                 }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStrName'), 'default', variables('eventSourceMap').eventbase_blobtrigger_container)]",
-                "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('dataStrName'))]",
-              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName')), variables('queueSenderRoleid'))]",
-              "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('queueSenderRoleid'))]",
-                "principalType": "ServicePrincipal",
-                "principalId": "[reference(resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName')), '2022-06-15', 'full').identity.principalId]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
-              ]
+              }
             },
             {
               "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}/{1}', variables('dataStrTopicName'), 'EnqueZipUploaded')]",
+              "name": "[format('{0}/{1}', parameters('dataStrTopicName'), 'EnqueZipUploaded')]",
               "properties": {
                 "eventDeliverySchema": "EventGridSchema",
                 "filter": {
-                  "subjectBeginsWith": "[format('/blobServices/default/containers/{0}/', variables('eventSourceMap').queuetrigger_container)]",
+                  "subjectBeginsWith": "[format('/blobServices/default/containers/{0}/', parameters('enqueueTriggerCotainerName'))]",
                   "subjectEndsWith": ".zip",
                   "includedEventTypes": [
                     "Microsoft.Storage.BlobCreated"
@@ -751,322 +1630,24 @@
                 },
                 "deliveryWithResourceIdentity": {
                   "identity": {
-                    "type": "SystemAssigned"
+                    "type": "UserAssigned",
+                    "userAssignedIdentity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('dataStrTopicIdName'))]"
                   },
                   "destination": {
                     "endpointType": "StorageQueue",
                     "properties": {
-                      "resourceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                      "queueName": "[variables('eventSourceMap').blob_created_queue]"
+                      "resourceId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('dataStrName'))]",
+                      "queueName": "[parameters('blobCreatedQueueName')]"
                     }
                   }
                 }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', variables('dataStrName'), 'default', variables('eventSourceMap').blob_created_queue)]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName')), variables('queueSenderRoleid')))]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('dataStrName'), 'default', variables('eventSourceMap').queuetrigger_container)]",
-                "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2020-10-01",
-              "name": "[variables('dataStrBlobPeName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "region": {
-                    "value": "[parameters('region')]"
-                  },
-                  "svcname": {
-                    "value": "[variables('dataStrName')]"
-                  },
-                  "svctype": {
-                    "value": "Microsoft.Storage/storageAccounts"
-                  },
-                  "zonename": {
-                    "value": "[format('privatelink.blob.{0}', environment().suffixes.storage)]"
-                  },
-                  "groupId": {
-                    "value": "blob"
-                  },
-                  "vnetName": {
-                    "value": "[parameters('vnetName')]"
-                  },
-                  "pesubnetName": {
-                    "value": "[parameters('pesubnetName')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.14.46.61228",
-                      "templateHash": "15790817288533340525"
-                    }
-                  },
-                  "parameters": {
-                    "vnetName": {
-                      "type": "string"
-                    },
-                    "pesubnetName": {
-                      "type": "string"
-                    },
-                    "region": {
-                      "type": "string"
-                    },
-                    "svcname": {
-                      "type": "string"
-                    },
-                    "svctype": {
-                      "type": "string"
-                    },
-                    "zonename": {
-                      "type": "string"
-                    },
-                    "groupId": {
-                      "type": "string"
-                    }
-                  },
-                  "variables": {
-                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
-                    "peNicName": "[format('{0}-nic', variables('pename'))]",
-                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-                      "apiVersion": "2022-07-01",
-                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
-                      "properties": {
-                        "privateDnsZoneConfigs": [
-                          {
-                            "name": "config",
-                            "properties": {
-                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
-                            }
-                          }
-                        ]
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
-                      ]
-                    },
-                    {
-                      "type": "Microsoft.Network/privateEndpoints",
-                      "apiVersion": "2022-07-01",
-                      "name": "[variables('pename')]",
-                      "location": "[parameters('region')]",
-                      "properties": {
-                        "privateLinkServiceConnections": [
-                          {
-                            "name": "[variables('pename')]",
-                            "properties": {
-                              "privateLinkServiceId": "[variables('svcid')]",
-                              "groupIds": [
-                                "[parameters('groupId')]"
-                              ]
-                            }
-                          }
-                        ],
-                        "customNetworkInterfaceName": "[variables('peNicName')]",
-                        "subnet": {
-                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2020-10-01",
-              "name": "[variables('dataStrQueuePeName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "region": {
-                    "value": "[parameters('region')]"
-                  },
-                  "svcname": {
-                    "value": "[variables('dataStrName')]"
-                  },
-                  "svctype": {
-                    "value": "Microsoft.Storage/storageAccounts"
-                  },
-                  "zonename": {
-                    "value": "[format('privatelink.queue.{0}', environment().suffixes.storage)]"
-                  },
-                  "groupId": {
-                    "value": "queue"
-                  },
-                  "vnetName": {
-                    "value": "[parameters('vnetName')]"
-                  },
-                  "pesubnetName": {
-                    "value": "[parameters('pesubnetName')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.14.46.61228",
-                      "templateHash": "15790817288533340525"
-                    }
-                  },
-                  "parameters": {
-                    "vnetName": {
-                      "type": "string"
-                    },
-                    "pesubnetName": {
-                      "type": "string"
-                    },
-                    "region": {
-                      "type": "string"
-                    },
-                    "svcname": {
-                      "type": "string"
-                    },
-                    "svctype": {
-                      "type": "string"
-                    },
-                    "zonename": {
-                      "type": "string"
-                    },
-                    "groupId": {
-                      "type": "string"
-                    }
-                  },
-                  "variables": {
-                    "pename": "[format('{0}-{1}-pe', parameters('svcname'), parameters('groupId'))]",
-                    "peNicName": "[format('{0}-nic', variables('pename'))]",
-                    "svcid": "[resourceId(parameters('svctype'), parameters('svcname'))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-                      "apiVersion": "2022-07-01",
-                      "name": "[format('{0}/{1}', variables('pename'), 'default')]",
-                      "properties": {
-                        "privateDnsZoneConfigs": [
-                          {
-                            "name": "config",
-                            "properties": {
-                              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('zonename'))]"
-                            }
-                          }
-                        ]
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Network/privateEndpoints', variables('pename'))]"
-                      ]
-                    },
-                    {
-                      "type": "Microsoft.Network/privateEndpoints",
-                      "apiVersion": "2022-07-01",
-                      "name": "[variables('pename')]",
-                      "location": "[parameters('region')]",
-                      "properties": {
-                        "privateLinkServiceConnections": [
-                          {
-                            "name": "[variables('pename')]",
-                            "properties": {
-                              "privateLinkServiceId": "[variables('svcid')]",
-                              "groupIds": [
-                                "[parameters('groupId')]"
-                              ]
-                            }
-                          }
-                        ],
-                        "customNetworkInterfaceName": "[variables('peNicName')]",
-                        "subnet": {
-                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('pesubnetName'))]"
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2020-10-01",
-              "name": "mergeSettings",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "appName": {
-                    "value": "[parameters('funcAppName')]"
-                  },
-                  "settings1": {
-                    "value": "[list(format('Microsoft.Web/sites/{0}/config/appsettings', parameters('funcAppName')), '2022-03-01').properties]"
-                  },
-                  "settings2": {
-                    "value": "[union(createObject('AzureWebJobsDataStorage', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('dataStrName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), '2022-05-01').keys[0].value)), variables('eventSourceMap'))]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.14.46.61228",
-                      "templateHash": "2863576707849206433"
-                    }
-                  },
-                  "parameters": {
-                    "appName": {
-                      "type": "string"
-                    },
-                    "settings1": {
-                      "type": "object"
-                    },
-                    "settings2": {
-                      "type": "object"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Web/sites/config",
-                      "apiVersion": "2022-03-01",
-                      "name": "[format('{0}/appsettings', parameters('appName'))]",
-                      "properties": "[union(parameters('settings1'), parameters('settings2'))]"
-                    }
-                  ]
-                }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
-              ]
+              }
             }
           ]
         }
       },
       "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'infra')]",
         "[resourceId('Microsoft.Resources/deployments', 'platform')]"
       ]
     }

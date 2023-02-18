@@ -132,6 +132,7 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
       vnetRouteAllEnabled: true
       functionsRuntimeScaleMonitoringEnabled: true
       publicNetworkAccess: 'Enabled'
+      ipSecurityRestrictionsDefaultAction: 'Deny'
       ipSecurityRestrictions: [
         {
           priority: 1000
@@ -141,7 +142,10 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           ipAddress: 'AzureEventGrid'
         }
       ]
-      scmIpSecurityRestrictionsUseMain: false
+      scmIpSecurityRestrictionsUseMain: true
+      scmIpSecurityRestrictionsDefaultAction: 'Deny'
+      scmIpSecurityRestrictions: [
+      ]
       appSettings:[
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
@@ -209,8 +213,8 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
 module mergeSettings 'mergeAppSettings.bicep' = {
   name: 'mergeSettings'
   params: {
-    appName: funcAppName
-    settings1: list('Microsoft.Web/sites/${funcAppName}/config/appsettings', '2022-03-01').properties
+    appName: funcApp.name
+    settings1: list('Microsoft.Web/sites/${funcApp.name}/config/appsettings', '2022-03-01').properties
     settings2: eventSourceMap
   }
 }

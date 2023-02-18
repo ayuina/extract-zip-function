@@ -1,7 +1,8 @@
 param prefix string
 param region string
+param vnetaddressPrefix24 string
 
-var vnetRootRange24 = '10.0.0'
+var vnetRootRange24 = vnetaddressPrefix24
 var vnetName = '${prefix}-vnet'
 var vnetRange = '${vnetRootRange24}.0/24'
 var pesubnetName = 'private-endpoint-subnet'
@@ -17,6 +18,8 @@ var fileZoneName = 'privatelink.file.${environment().suffixes.storage}'
 
 var funcStrName = '${replace(prefix, '-', '')}funcstr'
 var dataStrName = '${replace(prefix, '-', '')}datastr'
+var dataStrTopicName = '${dataStrName}-topic'
+var dataStrTopicIdName = '${dataStrTopicName}-uami'
 
 
 resource vnet 'Microsoft.Network/virtualNetworks@2022-07-01' = {
@@ -147,6 +150,13 @@ resource funcStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   sku: {
     name: 'Standard_LRS'
   }
+  properties: {
+    allowBlobPublicAccess: false
+    networkAcls: {
+      bypass: 'None'
+      defaultAction: 'Deny'
+    }
+  }
 }
 
 resource dataStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
@@ -155,6 +165,19 @@ resource dataStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   kind: 'StorageV2'
   sku: {
     name: 'Standard_LRS'
+  }
+  properties: {
+    allowBlobPublicAccess: false
+    networkAcls: {
+       resourceAccessRules: [
+        {
+          tenantId: tenant().tenantId
+          resourceId: resourceId('Microsoft.EventGrid/systemTopics', dataStrTopicName) 
+        }
+       ]
+      bypass: 'AzureServices'
+      defaultAction: 'Deny'
+    }
   }
 }
 
@@ -237,9 +260,47 @@ module dataQueuePe './privateEndpoint.bicep' = {
   }
 }
 
+resource topicuami 'Microsoft.ManagedIdentity/userAssignedIdentities@2022-01-31-preview' = {
+  name: dataStrTopicIdName
+  location: region
+}
+
+resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
+  name: dataStrTopicName
+  location: region
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${topicuami.id}': {
+      }
+    }
+  }
+  properties: {
+    source: dataStr.id
+    topicType: 'Microsoft.Storage.StorageAccounts'
+  }
+}
+
+resource queueSenderRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  scope: subscription()
+  name: 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'
+}
+
+resource queueSenderAssign 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: dataStr
+  name: guid(dataStr.id, topicuami.id, queueSenderRoleDef.id)
+  properties:{
+    roleDefinitionId: queueSenderRoleDef.id
+    principalType: 'ServicePrincipal'
+    principalId: topicuami.properties.principalId
+  }
+}
+
 
 output vnetName string = vnetName
 output pesubnetName string = pesubnetName
 output funcsubnetName string = funcsubnetName
 output funcStrName string = funcStrName
 output dataStrName string = dataStrName
+output dataStrTopicName string = dataStrTopicName
+output dataStrTopicIdName string = dataStrTopicIdName

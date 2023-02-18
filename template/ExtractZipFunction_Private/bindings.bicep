@@ -4,18 +4,13 @@ param dataStrName string
 param eventbaseBlobTriggerContainerName string
 param enqueueTriggerCotainerName string
 param blobCreatedQueueName string
+param dataStrTopicName string
+param dataStrTopicIdName string 
 
-var dataStrTopicName = '${dataStrName}-topic'
 var eventbaseBlobtriggerFunctionName = 'ExtractArchive'
-var queueSenderRoleid = 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'
 
 resource funcApp 'Microsoft.Web/sites@2022-03-01' existing = {
   name: funcAppName
-}
-
-resource queueSenderRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  scope: subscription()
-  name: queueSenderRoleid
 }
 
 resource dataStr 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
@@ -32,27 +27,12 @@ resource dataStr 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
 
 /// event grid ///
 
-resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
+resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' existing = {
   name: dataStrTopicName
-  location: region
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    source: dataStr.id
-    topicType: 'Microsoft.Storage.StorageAccounts'
-  }
 }
 
-
-resource queueSenderAssign 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: dataStr
-  name: guid(dataStr.id, topic.id, queueSenderRoleid)
-  properties:{
-    roleDefinitionId: queueSenderRoleDef.id
-    principalType: 'ServicePrincipal'
-    principalId: topic.identity.principalId
-  }
+resource topicid 'Microsoft.ManagedIdentity/userAssignedIdentities@2022-01-31-preview' existing = {
+  name: dataStrTopicIdName
 }
 
 
@@ -91,7 +71,8 @@ resource subsc2 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15'
     }
     deliveryWithResourceIdentity: {
       identity: {
-        type: 'SystemAssigned'
+        type: 'UserAssigned'
+        userAssignedIdentity: topicid.id
       }
       destination: {
         endpointType: 'StorageQueue'
