@@ -3,12 +3,69 @@ param region string
 param vnetName string
 param pesubnetName string
 param funcsubnetName string
+param runFromPackageUrl string
+param funcStrName string
+param dataStrName string
 
-var funcStrName = '${replace(prefix, '-', '')}funcstr'
 var logAnalyticsName = '${prefix}-laws'
 var appInsightsName = '${prefix}-ai'
+
 var funcAppName = '${prefix}-func'
 var funcPlanName = '${prefix}-func-plan'
+var funcFilesName = toLower(funcAppName)
+
+var eventSourceMap = {
+  eventbase_blobtrigger_container: 'archive-upload-for-eventgrid'
+  standard_blobtrigger_container:'archive-upload-for-polling'
+  queuetrigger_container: 'archive-upload-for-queue'
+  blob_created_queue:'archive-upload-queue'
+  extracted_container: 'archive-extracted'
+}
+
+resource funcStr 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
+  name: funcStrName
+  
+  resource fileSvc 'fileServices' existing = {
+    name: 'default'
+
+    resource funcFilesShare 'shares' = {
+      name: funcFilesName
+    }
+  }
+}
+
+resource dataStr 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
+  name: dataStrName
+
+  resource blobSvc 'blobServices' existing = {
+    name: 'default'
+
+    resource extractedContainer 'containers' = {
+      name: eventSourceMap.extracted_container
+    }
+
+    resource eventbaseBlobTriggerContainer 'containers' = {
+      name: eventSourceMap.eventbase_blobtrigger_container
+    }
+
+    resource standardBlobTriggerContainer 'containers' = {
+      name: eventSourceMap.standard_blobtrigger_container
+    }
+    
+    resource enqueueTrigerContainer 'containers' = {
+      name: eventSourceMap.queuetrigger_container
+    }
+  }
+
+  resource queueSvc 'queueServices' existing = {
+    name: 'default'
+
+    resource signal 'queues' = {
+      name: eventSourceMap.blob_created_queue
+    }
+  }  
+}
+
 
 resource vnet 'Microsoft.Network/virtualNetworks@2022-07-01' existing = {
   name: vnetName
@@ -21,14 +78,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2022-07-01' existing = {
   }
 }
 
-resource funcStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
-  name: funcStrName
-  location: region
-  kind: 'StorageV2'
-  sku: {
-    name: 'Standard_LRS'
-  }
-}
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsName
@@ -97,43 +146,9 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           tag: 'ServiceTag'
           ipAddress: 'AzureEventGrid'
         }
-        {
-          priority: 100000
-          name: 'deny-all-inbound'
-          action: 'Deny'
-          ipAddress: 'Any'
-        }
       ]
-      scmIpSecurityRestrictionsUseMain: true
-      scmIpSecurityRestrictions:[
-        {
-          priority: 100000
-          name: 'deny-all-inbound'
-          action: 'Deny'
-          ipAddress: 'Any'
-        }
-      ]
+      scmIpSecurityRestrictionsUseMain: false
       appSettings:[
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: appinsights.properties.InstrumentationKey
-        }
-        {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${funcStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${funcStr.listKeys().keys[0].value}'
-        }
-        {
-          name: 'AzureWebJobsDashboard'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${funcStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${funcStr.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${funcStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${funcStr.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(funcAppName)
-        }
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
           value: '~4'
@@ -143,15 +158,66 @@ resource funcApp 'Microsoft.Web/sites@2022-03-01' = {
           value: 'dotnet'
         }
         {
-          name: 'Project'
-          value: 'src'
+          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
+          value: appinsights.properties.InstrumentationKey
         }
         {
-          name: 'SCM_COMMAND_IDLE_TIMEOUT'
-          value: '180'
+          name: 'AzureWebJobsStorage'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${funcStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${funcStr.listKeys().keys[0].value}'
         }
+        {
+          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${funcStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${funcStr.listKeys().keys[0].value}'
+        }
+        {
+          name: 'WEBSITE_CONTENTSHARE'
+          value: funcFilesName
+        }
+        {
+          name: 'WEBSITE_CONTENTOVERVNET'
+          value: '1'
+        }
+        {
+          name: 'WEBSITE_DNS_SERVER'
+          value: '168.63.129.16'
+        }
+        {
+          name: 'AzureWebJobsDataStorage'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${dataStrName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${dataStr.listKeys().keys[0].value}'
+        }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: runFromPackageUrl
+        }
+        // {
+        //   name: 'Project'
+        //   value: 'src'
+        // }
+        // {
+        //   name: 'SCM_COMMAND_IDLE_TIMEOUT'
+        //   value: '180'
+        // }
       ]
     }
+  }
+}
+
+// resource source 'Microsoft.Web/sites/sourcecontrols@2022-03-01' = {
+//   parent: funcApp
+//   name: 'web'
+//   properties: {
+//     repoUrl: funcSrcRepoUrl
+//     branch: 'main'
+//     isManualIntegration: true
+//   }
+// }
+
+module mergeSettings 'mergeAppSettings.bicep' = {
+  name: 'mergeSettings'
+  params: {
+    appName: funcAppName
+    settings1: list('Microsoft.Web/sites/${funcAppName}/config/appsettings', '2022-03-01').properties
+    settings2: eventSourceMap
   }
 }
 
@@ -177,3 +243,4 @@ module funcPe './privateEndpoint.bicep' = {
 output funcAppName string = funcAppName
 output vnetName string = vnetName
 output pesubnetName string = pesubnetName
+output dataStrName string = dataStrName

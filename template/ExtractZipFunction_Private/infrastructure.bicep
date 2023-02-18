@@ -15,6 +15,10 @@ var queueZoneName = 'privatelink.queue.${environment().suffixes.storage}'
 var tableZoneName = 'privatelink.table.${environment().suffixes.storage}'
 var fileZoneName = 'privatelink.file.${environment().suffixes.storage}'
 
+var funcStrName = '${replace(prefix, '-', '')}funcstr'
+var dataStrName = '${replace(prefix, '-', '')}datastr'
+
+
 resource vnet 'Microsoft.Network/virtualNetworks@2022-07-01' = {
   name: vnetName
   location: region
@@ -136,7 +140,106 @@ resource filePrivateZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   }
 }
 
+resource funcStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
+  name: funcStrName
+  location: region
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+resource dataStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
+  name: dataStrName
+  location: region
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+
+module blobPe './privateEndpoint.bicep' = {
+  name: 'funcstr-blob-pe'
+  params:{
+    region: region
+    svcname: funcStr.name
+    svctype: funcStr.type
+    zonename: blobPrivateZone.name
+    groupId: 'blob'
+    vnetName: vnetName
+    pesubnetName: pesubnetName
+  }
+}
+
+module queuePe './privateEndpoint.bicep' = {
+  name: 'funcstr-queue-pe'
+  params:{
+    region: region
+    svcname: funcStr.name
+    svctype: funcStr.type
+    zonename: queuePrivateZone.name
+    groupId: 'queue'
+    vnetName: vnetName
+    pesubnetName: pesubnetName
+  }
+}
+
+module tablePe './privateEndpoint.bicep' = {
+  name: 'funcstr-table-pe'
+  params:{
+    region: region
+    svcname: funcStr.name
+    svctype: funcStr.type
+    zonename: tablePrivateZone.name
+    groupId: 'table'
+    vnetName: vnetName
+    pesubnetName: pesubnetName
+  }
+}
+
+module filePe './privateEndpoint.bicep' = {
+  name: 'funcstr-file-pe'
+  params:{
+    region: region
+    svcname: funcStr.name
+    svctype: funcStr.type
+    zonename: filePrivateZone.name
+    groupId: 'file'
+    vnetName: vnetName
+    pesubnetName: pesubnetName
+  }
+}
+
+module dataBlobPe './privateEndpoint.bicep' = {
+  name: 'datastr-blob-pe'
+  params:{
+    region: region
+    svcname: dataStr.name
+    svctype: dataStr.type
+    zonename: blobPrivateZone.name
+    groupId: 'blob'
+    vnetName: vnetName
+    pesubnetName: pesubnetName
+  }
+}
+
+module dataQueuePe './privateEndpoint.bicep' = {
+  name: 'datastr-queue-pe'
+  params:{
+    region: region
+    svcname: dataStr.name
+    svctype: dataStr.type
+    zonename: queuePrivateZone.name
+    groupId: 'queue'
+    vnetName: vnetName
+    pesubnetName: pesubnetName
+  }
+}
+
+
 output vnetName string = vnetName
 output pesubnetName string = pesubnetName
 output funcsubnetName string = funcsubnetName
-
+output funcStrName string = funcStrName
+output dataStrName string = dataStrName
