@@ -19,7 +19,6 @@ var fileZoneName = 'privatelink.file.${environment().suffixes.storage}'
 var funcStrName = '${replace(prefix, '-', '')}funcstr'
 var dataStrName = '${replace(prefix, '-', '')}datastr'
 var dataStrTopicName = '${dataStrName}-topic'
-var dataStrTopicIdName = '${dataStrTopicName}-uami'
 
 
 resource vnet 'Microsoft.Network/virtualNetworks@2022-07-01' = {
@@ -169,17 +168,12 @@ resource dataStr 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   properties: {
     allowBlobPublicAccess: false
     networkAcls: {
-       resourceAccessRules: [
-        {
-          tenantId: tenant().tenantId
-          resourceId: resourceId('Microsoft.EventGrid/systemTopics', dataStrTopicName) 
-        }
-       ]
       bypass: 'AzureServices'
       defaultAction: 'Deny'
     }
   }
 }
+
 
 
 module blobPe './privateEndpoint.bicep' = {
@@ -260,26 +254,18 @@ module dataQueuePe './privateEndpoint.bicep' = {
   }
 }
 
-resource topicuami 'Microsoft.ManagedIdentity/userAssignedIdentities@2022-01-31-preview' = {
-  name: dataStrTopicIdName
-  location: region
-}
-
 resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
   name: dataStrTopicName
   location: region
   identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${topicuami.id}': {
-      }
-    }
+    type: 'SystemAssigned'
   }
   properties: {
     source: dataStr.id
     topicType: 'Microsoft.Storage.StorageAccounts'
   }
 }
+
 
 resource queueSenderRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   scope: subscription()
@@ -288,11 +274,11 @@ resource queueSenderRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01'
 
 resource queueSenderAssign 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: dataStr
-  name: guid(dataStr.id, topicuami.id, queueSenderRoleDef.id)
+  name: guid(dataStr.id, topic.id, queueSenderRoleDef.id)
   properties:{
     roleDefinitionId: queueSenderRoleDef.id
     principalType: 'ServicePrincipal'
-    principalId: topicuami.properties.principalId
+    principalId: topic.identity.principalId
   }
 }
 
@@ -303,4 +289,3 @@ output funcsubnetName string = funcsubnetName
 output funcStrName string = funcStrName
 output dataStrName string = dataStrName
 output dataStrTopicName string = dataStrTopicName
-output dataStrTopicIdName string = dataStrTopicIdName

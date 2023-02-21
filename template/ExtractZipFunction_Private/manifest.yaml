@@ -1,5 +1,5 @@
 name: ExtractZipFunction_Private
-version: 1.0.0
+version: 1.0.1
 summary: Azure Functions sample to extract zip file uploaded into blob container in Private VNET.
 description: Deploys functions app and sources, event source, and event grid.
 runner: ARM

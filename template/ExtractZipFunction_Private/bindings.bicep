@@ -5,7 +5,6 @@ param eventbaseBlobTriggerContainerName string
 param enqueueTriggerCotainerName string
 param blobCreatedQueueName string
 param dataStrTopicName string
-param dataStrTopicIdName string 
 
 var eventbaseBlobtriggerFunctionName = 'ExtractArchive'
 
@@ -30,11 +29,6 @@ resource dataStr 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
 resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' existing = {
   name: dataStrTopicName
 }
-
-resource topicid 'Microsoft.ManagedIdentity/userAssignedIdentities@2022-01-31-preview' existing = {
-  name: dataStrTopicIdName
-}
-
 
 resource subsc1 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15' = {
   parent: topic
@@ -71,8 +65,7 @@ resource subsc2 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15'
     }
     deliveryWithResourceIdentity: {
       identity: {
-        type: 'UserAssigned'
-        userAssignedIdentity: topicid.id
+        type: 'SystemAssigned'
       }
       destination: {
         endpointType: 'StorageQueue'

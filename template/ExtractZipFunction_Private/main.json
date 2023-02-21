@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.14.46.61228",
-      "templateHash": "3236897701262203497"
+      "templateHash": "13658950031481485687"
     }
   },
   "parameters": {
@@ -59,7 +59,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "12241978332865213040"
+              "templateHash": "15886903175706090055"
             }
           },
           "parameters": {
@@ -88,8 +88,7 @@
             "fileZoneName": "[format('privatelink.file.{0}', environment().suffixes.storage)]",
             "funcStrName": "[format('{0}funcstr', replace(parameters('prefix'), '-', ''))]",
             "dataStrName": "[format('{0}datastr', replace(parameters('prefix'), '-', ''))]",
-            "dataStrTopicName": "[format('{0}-topic', variables('dataStrName'))]",
-            "dataStrTopicIdName": "[format('{0}-uami', variables('dataStrTopicName'))]"
+            "dataStrTopicName": "[format('{0}-topic', variables('dataStrName'))]"
           },
           "resources": [
             {
@@ -266,22 +265,10 @@
               "properties": {
                 "allowBlobPublicAccess": false,
                 "networkAcls": {
-                  "resourceAccessRules": [
-                    {
-                      "tenantId": "[tenant().tenantId]",
-                      "resourceId": "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
-                    }
-                  ],
                   "bypass": "AzureServices",
                   "defaultAction": "Deny"
                 }
               }
-            },
-            {
-              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
-              "apiVersion": "2022-01-31-preview",
-              "name": "[variables('dataStrTopicIdName')]",
-              "location": "[parameters('region')]"
             },
             {
               "type": "Microsoft.EventGrid/systemTopics",
@@ -289,33 +276,29 @@
               "name": "[variables('dataStrTopicName')]",
               "location": "[parameters('region')]",
               "identity": {
-                "type": "UserAssigned",
-                "userAssignedIdentities": {
-                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName')))]": {}
-                }
+                "type": "SystemAssigned"
               },
               "properties": {
                 "source": "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
                 "topicType": "Microsoft.Storage.StorageAccounts"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]"
               ]
             },
             {
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('dataStrName'))]",
-              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName')), resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'))]",
               "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a')]",
                 "principalType": "ServicePrincipal",
-                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName')), '2022-01-31-preview').principalId]"
+                "principalId": "[reference(resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName')), '2022-06-15', 'full').identity.principalId]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('dataStrName'))]",
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('dataStrTopicIdName'))]"
+                "[resourceId('Microsoft.EventGrid/systemTopics', variables('dataStrTopicName'))]"
               ]
             },
             {
@@ -1063,10 +1046,6 @@
             "dataStrTopicName": {
               "type": "string",
               "value": "[variables('dataStrTopicName')]"
-            },
-            "dataStrTopicIdName": {
-              "type": "string",
-              "value": "[variables('dataStrTopicIdName')]"
             }
           }
         }
@@ -1538,6 +1517,9 @@
           "dataStrName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'platform'), '2020-10-01').outputs.dataStrName.value]"
           },
+          "dataStrTopicName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.dataStrTopicName.value]"
+          },
           "eventbaseBlobTriggerContainerName": {
             "value": "[variables('eventSourceMap').eventbase_blobtrigger_container]"
           },
@@ -1546,12 +1528,6 @@
           },
           "blobCreatedQueueName": {
             "value": "[variables('eventSourceMap').blob_created_queue]"
-          },
-          "dataStrTopicName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.dataStrTopicName.value]"
-          },
-          "dataStrTopicIdName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infra'), '2020-10-01').outputs.dataStrTopicIdName.value]"
           }
         },
         "template": {
@@ -1561,7 +1537,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.14.46.61228",
-              "templateHash": "9631464589078057986"
+              "templateHash": "17481674865222362346"
             }
           },
           "parameters": {
@@ -1584,9 +1560,6 @@
               "type": "string"
             },
             "dataStrTopicName": {
-              "type": "string"
-            },
-            "dataStrTopicIdName": {
               "type": "string"
             }
           },
@@ -1630,8 +1603,7 @@
                 },
                 "deliveryWithResourceIdentity": {
                   "identity": {
-                    "type": "UserAssigned",
-                    "userAssignedIdentity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('dataStrTopicIdName'))]"
+                    "type": "SystemAssigned"
                   },
                   "destination": {
                     "endpointType": "StorageQueue",

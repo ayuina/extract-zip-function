@@ -36,16 +36,15 @@ module platform './platform.bicep' = {
   }
 }
 
-module appplication './bindings.bicep' = {
+module bindings './bindings.bicep' = {
   name: 'bindings'
   params: {
     region: region
     funcAppName: platform.outputs.funcAppName
     dataStrName: platform.outputs.dataStrName
+    dataStrTopicName: infra.outputs.dataStrTopicName
     eventbaseBlobTriggerContainerName: eventSourceMap.eventbase_blobtrigger_container
     enqueueTriggerCotainerName: eventSourceMap.queuetrigger_container
     blobCreatedQueueName: eventSourceMap.blob_created_queue
-    dataStrTopicName: infra.outputs.dataStrTopicName
-    dataStrTopicIdName: infra.outputs.dataStrTopicIdName
   }
 }
